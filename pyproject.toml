@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "chronos-forecasting>=2.0.0",
+    "timesfm",
     "tirex-ts[gluonts,hfdataset]>=1.1.1",
 ]
 
@@ -16,3 +17,6 @@ dev = [
     "matplotlib>=3.10.7",
     "pre-commit>=4.3.0",
 ]
+
+[tool.uv.sources]
+timesfm = { git = "https://github.com/google-research/timesfm.git" }
