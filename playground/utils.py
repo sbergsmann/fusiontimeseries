@@ -20,9 +20,11 @@ def plot_forecast(
         real_future_values (torch.Tensor | None, optional): Actual values to be forecasted. Defaults to None.
         batch_idx (int, optional): Index of the timeseries in the batch to plot. Defaults to 0.
     """
-    median_forecast = quantile_fc[batch_idx, :, 4].numpy()
+    quantile_dim: int = quantile_fc.shape[-1]
+
+    median_forecast = quantile_fc[batch_idx, :, quantile_dim // 2].numpy()
     lower_bound = quantile_fc[batch_idx, :, 0].numpy()
-    upper_bound = quantile_fc[batch_idx, :, 8].numpy()
+    upper_bound = quantile_fc[batch_idx, :, -1].numpy()
     context = ctx[batch_idx, :].numpy()
 
     original_x = range(len(context))
@@ -42,7 +44,7 @@ def plot_forecast(
     plt.plot(
         forecast_x,
         median_forecast,
-        label="Forecast (Median)",
+        label=f"Forecast ({int(quantile_dim // 2 * 10)}% Quantile)",
         color="#d94e4e",
         linestyle="--",
     )
@@ -52,7 +54,7 @@ def plot_forecast(
         upper_bound,
         color="#d94e4e",
         alpha=0.1,
-        label="Forecast 10% - 90% Quantiles",
+        label=f"Forecast 10% - {int(quantile_dim * 10)}% Quantiles",
     )
     plt.xlim(left=0)
     plt.legend()
