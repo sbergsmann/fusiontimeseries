@@ -43,3 +43,15 @@ Run the [TiRex Playbook](playground/tirex-playbook.ipynb) from top to bottom to 
 ## 🪟 Only tested on Windows
 
 This repository and the included notebook have been validated on Windows (PowerShell). If you run into platform-specific issues on macOS/Linux, please file an issue or open a PR with repro steps.
+
+# Finetuning
+
+## Chronos Finetuning
+
+- https://auto.gluon.ai/stable/tutorials/timeseries/forecasting-chronos.html?utm_source=chatgpt.com
+- Supports Covariates
+
+## TimesFM Finetuning
+
+- https://github.com/pfnet-research/timesfm_fin
+-
