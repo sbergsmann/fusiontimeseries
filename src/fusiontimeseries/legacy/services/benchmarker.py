@@ -9,10 +9,10 @@ import json
 
 from torch.utils.data import DataLoader
 
-from fusiontimeseries.services.flux_dataset import FluxDataset
-from fusiontimeseries.services.flux_trace import FluxTrace
-from fusiontimeseries.services.scaler import Scaler
-from fusiontimeseries.services.utils import Utils
+from fusiontimeseries.legacy.services.evaluator import Evaluator
+from fusiontimeseries.legacy.services.flux_dataset import FluxDataset
+from fusiontimeseries.legacy.services.scaler import Scaler
+from fusiontimeseries.legacy.services.utils import Utils
 
 __all__ = ["FluxForecastingBenchmarker", "Benchmark"]
 
@@ -57,15 +57,13 @@ class FluxForecastingBenchmarker:
         self.benchmark_start_time: datetime | None = None
         self.benchmark_end_time: datetime | None = None
 
-    def benchmark(self, batch_size: int = 1, stop_after: int | None = None) -> None:
+    def benchmark(self, batch_size: int = 8, stop_after: int | None = None) -> None:
         # reset
         self.metrics = []
         self.benchmark_start_time = None
         self.benchmark_end_time = None
 
-        dataloader = DataLoader(
-            self.dataset, batch_size=batch_size, shuffle=True, collate_fn=lambda x: x[0]
-        )
+        dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
 
         total = stop_after if stop_after is not None else len(dataloader)
 
@@ -73,35 +71,60 @@ class FluxForecastingBenchmarker:
         with Progress() as progress:
             task = progress.add_task("[cyan]Benchmarking...", total=total)
 
-            for idx, fluxtrace in enumerate(dataloader):
-                fluxtrace: FluxTrace
+            for idx, batch in enumerate(dataloader):
                 if stop_after is not None and idx >= stop_after:
                     break
 
-                for ctx, tgt, _ in fluxtrace:
-                    ctx: torch.Tensor = ctx.to(self.DEVICE)
-                    tgt: torch.Tensor = tgt.to(self.DEVICE)
-                    _: int
+                ctx_batch, tgt_batch = batch
+                ctx_batch: torch.Tensor  # shape: [batch_size, 1, context_length]
+                tgt_batch: torch.Tensor  # shape: [batch_size, prediction_length]
 
-                    # Normalize context
-                    normed_ctx, mean, std = Scaler.setnorm(ctx)
+                # Normalize context (batch-wise)
+                normed_ctx, mean, std = Scaler.setnorm(ctx_batch)
 
-                    # Generate forecast
-                    with torch.no_grad():
-                        forecast: torch.Tensor = self.run_pipeline(
-                            normed_ctx
-                        )  # shape: [N, prediction_length, n_quantiles]
+                # Generate forecast
+                with torch.no_grad():
+                    forecast: torch.Tensor = self.run_pipeline(
+                        normed_ctx
+                    )  # shape: [batch_size, prediction_length, n_quantiles]
 
-                    # Denormalize forecast
-                    denormed_forecast = Scaler.denorm(forecast, mean, std)
+                # Denormalize forecast
+                denormed_forecast = Scaler.denorm(forecast, mean, std)
 
-                    fluxtrace.record(
-                        forecast=Utils.median_forecast(denormed_forecast).squeeze(0),
-                        target=tgt.squeeze(0),
-                        context=ctx.squeeze(0),
+                # Extract median forecast
+                median_forecast = Utils.median_forecast(
+                    denormed_forecast
+                )  # shape: [batch_size, prediction_length]
+
+                # Compute metrics for each sample in the batch
+                for i in range(ctx_batch.shape[0]):
+                    pred = median_forecast[i]  # [prediction_length]
+                    tgt = tgt_batch[i]  # [prediction_length]
+                    ctx = ctx_batch[i].squeeze(0)  # [context_length]
+
+                    # Compute all metrics
+                    mae = Evaluator.mae(pred, tgt)
+                    rmse = Evaluator.rmse(pred, tgt)
+                    nrmse = Evaluator.nrmse(pred, tgt)
+                    nd = Evaluator.nd(pred, tgt)
+                    mape = Evaluator.mape(pred, tgt)
+                    smape = Evaluator.smape(pred, tgt)
+                    mase = Evaluator.mase(pred, tgt, ctx)
+                    directional_acc = Evaluator.directional_accuracy(pred, tgt)
+
+                    self.metrics.append(
+                        {
+                            "MAE": mae,
+                            "RMSE": rmse,
+                            "NRMSE": nrmse,
+                            "ND": nd,
+                            "MAPE": mape,
+                            "sMAPE": smape,
+                            "MASE": mase,
+                            "Directional Accuracy": directional_acc,
+                        }
                     )
 
-                self.metrics.append(fluxtrace.forecast_summary())
                 progress.update(task, advance=1)
 
         self.benchmark_end_time = datetime.now()

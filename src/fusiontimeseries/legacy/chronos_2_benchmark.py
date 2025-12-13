@@ -3,50 +3,58 @@ from rich.console import Console
 # Initialize the Rich console object once
 console = Console()
 
-console.rule("[bold blue]Starting TiRex Benchmarking Script...[/bold blue]")
+console.rule("[bold blue]Starting Chronos 2 Benchmarking Script...[/bold blue]")
 console.log("[bold blue]Importing Benchmarking Services...[/bold blue]")
-from fusiontimeseries.services.benchmarker import FluxForecastingBenchmarker  # noqa: E402
-from fusiontimeseries.services.flux_dataset import FluxDataset  # noqa: E402
-from fusiontimeseries.services.flux_trace_provider import FluxTraceProvider  # noqa: E402
+from fusiontimeseries.legacy.services.benchmarker import FluxForecastingBenchmarker  # noqa: E402
+from fusiontimeseries.legacy.services.flux_dataset import FluxDataset  # noqa: E402
+from fusiontimeseries.legacy.services.flux_trace_provider import FluxTraceProvider  # noqa: E402
 
-console.log("[bold blue]Importing TiRex Library...[/bold blue]")
-from tirex import load_model, ForecastModel  # noqa: E402
+console.log("[bold blue]Importing Chronos Library...[/bold blue]")
+from chronos import Chronos2Pipeline  # noqa: E402
 import torch  # noqa: E402
 
 
-class TirexBenchmarker(FluxForecastingBenchmarker):
+class Chronos2Benchmarker(FluxForecastingBenchmarker):
     def __init__(self, dataset: FluxDataset, model: str) -> None:
         super().__init__(dataset, model)
 
         # 1. Visualize Model Loading/Initialization
         with console.status(
-            f"[bold cyan]Loading TiRex Model: {model}...[/bold cyan]", spinner="dots"
+            f"[bold cyan]Loading Chronos Model: {model}...[/bold cyan]", spinner="dots"
         ) as _:
-            self.model: ForecastModel = load_model(path=model, device=str(self.DEVICE))  # type: ignore
+            self.pipeline: Chronos2Pipeline = Chronos2Pipeline.from_pretrained(
+                pretrained_model_name_or_path=model,
+                device_map=self.DEVICE,
+                dtype=torch.bfloat16,
+            )
         console.log(
             f"[bold green]✅ Model '{model}' Loaded Successfully on {self.DEVICE}.[/bold green]"
         )
 
     def run_pipeline(self, input: torch.Tensor) -> torch.Tensor:
-        """Run the TiRex pipeline on the input tensor."""
-        # TiRex expects [batch, context_length]
-        quantiles, _ = self.model.forecast(
-            context=input, prediction_length=self.dataset.prediction_length
+        """Run the Chronos pipeline on the input tensor."""
+        # Chronos expects [batch, n_variates, context_length], n_variates=1
+        # IMPORTANT: Keep input on CPU - the pipeline will handle device placement
+
+        forecast: list[torch.Tensor] = self.pipeline.predict(
+            inputs=input,  # [B, 1, context_length]
+            prediction_length=self.dataset.prediction_length,
         )
-        # quantiles is [batch, prediction_length, n_quantiles]
-        return quantiles  # type: ignore
+        # forecast[0] is [batch, n_quantiles, prediction_length]
+        # Move result back to the correct device
+        return forecast[0].permute(0, 2, 1)  # [batch, prediction_length, n_quantiles]
 
 
 def main() -> None:
-    MODEL = "NX-AI/TiRex"
+    MODEL = "amazon/chronos-2"
     PREDICTION_LEN = 64
     CONTEXT_LEN = 128
     WINDOW = 32
 
     # --- Setup and Seeding ---
-    console.rule("[bold yellow]TiRex Benchmarking Setup[/bold yellow]")
+    console.rule("[bold yellow]Chronos 2 Benchmarking Setup[/bold yellow]")
     console.log(
-        f"Model: [green]{MODEL}[/green] | Device: [blue]{TirexBenchmarker.DEVICE}[/blue]"
+        f"Model: [green]{MODEL}[/green] | Device: [blue]{Chronos2Benchmarker.DEVICE}[/blue]"
     )
     torch.manual_seed(42)
     torch.cuda.manual_seed_all(42)
@@ -76,12 +84,12 @@ def main() -> None:
     )
 
     # --- Benchmarker Initialization (Triggers Model Loading) ---
-    benchmarker = TirexBenchmarker(dataset, model=MODEL)
+    benchmarker = Chronos2Benchmarker(dataset, model=MODEL)
     console.rule("[bold yellow]Benchmarking Process[/bold yellow]")
 
     console.log(
         "[bold blue]Running on Device:[/bold blue] "
-        f"[green]{TirexBenchmarker.DEVICE}[/green]"
+        f"[green]{Chronos2Benchmarker.DEVICE}[/green]"
     )
 
     # --- Running Benchmark ---

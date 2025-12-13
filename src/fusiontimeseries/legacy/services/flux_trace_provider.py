@@ -53,6 +53,7 @@ class FluxTraceProvider:
                 "Environment variable FLUX_TRACE_DIR is not set. Please set it to the directory containing flux trace data files."
             )
         self.dir: Path = Path(flux_dir_str)
+        os.makedirs(self.dir, exist_ok=True)
 
     @cache
     def load_flux_energy_data(self, iteration: int) -> torch.Tensor:

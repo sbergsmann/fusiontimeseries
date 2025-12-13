@@ -3,57 +3,69 @@ from rich.console import Console
 # Initialize the Rich console object once
 console = Console()
 
-console.rule("[bold blue]Starting Chronos 2 Benchmarking Script...[/bold blue]")
+console.rule("[bold blue]Starting TimesFM 2.5 200M Benchmarking Script...[/bold blue]")
 console.log("[bold blue]Importing Benchmarking Services...[/bold blue]")
-from fusiontimeseries.services.benchmarker import FluxForecastingBenchmarker  # noqa: E402
-from fusiontimeseries.services.flux_dataset import FluxDataset  # noqa: E402
-from fusiontimeseries.services.flux_trace_provider import FluxTraceProvider  # noqa: E402
+from fusiontimeseries.legacy.services.benchmarker import FluxForecastingBenchmarker  # noqa: E402
+from fusiontimeseries.legacy.services.flux_dataset import FluxDataset  # noqa: E402
+from fusiontimeseries.legacy.services.flux_trace_provider import FluxTraceProvider  # noqa: E402
 
-console.log("[bold blue]Importing Chronos Library...[/bold blue]")
-from chronos import Chronos2Pipeline  # noqa: E402
+console.log("[bold blue]Importing TimesFM Library...[/bold blue]")
+import timesfm  # noqa: E402
 import torch  # noqa: E402
 
 
-class Chronos2Benchmarker(FluxForecastingBenchmarker):
+class TimesFmBenchmarker(FluxForecastingBenchmarker):
     def __init__(self, dataset: FluxDataset, model: str) -> None:
         super().__init__(dataset, model)
 
         # 1. Visualize Model Loading/Initialization
         with console.status(
-            f"[bold cyan]Loading Chronos Model: {model}...[/bold cyan]", spinner="dots"
+            f"[bold cyan]Loading TimesFM Model: {model}...[/bold cyan]", spinner="dots"
         ) as _:
-            self.pipeline: Chronos2Pipeline = Chronos2Pipeline.from_pretrained(
-                pretrained_model_name_or_path=model,
-                device_map=self.DEVICE,
-                dtype=torch.bfloat16,
+            self.pipeline = timesfm.TimesFM_2p5_200M_torch.from_pretrained(
+                model, torch_compile=True
+            )
+            self.pipeline.compile(
+                timesfm.ForecastConfig(
+                    max_context=min(
+                        dataset.context_length or 0 + dataset.prediction_length, 1024
+                    ),
+                    per_core_batch_size=1,
+                    max_horizon=dataset.prediction_length,
+                    normalize_inputs=True,
+                    use_continuous_quantile_head=True,
+                    force_flip_invariance=True,
+                    infer_is_positive=True,
+                    fix_quantile_crossing=True,
+                )
             )
         console.log(
             f"[bold green]✅ Model '{model}' Loaded Successfully on {self.DEVICE}.[/bold green]"
         )
 
     def run_pipeline(self, input: torch.Tensor) -> torch.Tensor:
-        """Run the Chronos pipeline on the input tensor."""
-        # Chronos expects [batch, n_variates, context_length], n_variates=1
-        input = input.unsqueeze(1)  # [1, context_length] -> [1, 1, context_length]
-
-        forecast: list[torch.Tensor] = self.pipeline.predict(
-            inputs=input,
-            prediction_length=self.dataset.prediction_length,
-        )
-        # forecast[0] is [batch, n_quantiles, prediction_length]
-        return forecast[0].permute(0, 2, 1)  # [batch, prediction_length, n_quantiles]
+        """Run the TimesFM pipeline on the input tensor."""
+        # TimesFM expects list of 1D tensors
+        # Expect input: shape [batch, context_length]
+        inputs = [ts.squeeze(0) for ts in input]  # list of 1D tensors
+        with torch.no_grad():
+            point_forecast, quantile_forecast = self.pipeline.forecast(
+                horizon=self.dataset.prediction_length,
+                inputs=inputs,  # type: ignore
+            )
+        return torch.from_numpy(quantile_forecast[:, :, 1:])
 
 
 def main() -> None:
-    MODEL = "amazon/chronos-2"
+    MODEL = "google/timesfm-2.5-200m-pytorch"
     PREDICTION_LEN = 64
     CONTEXT_LEN = 128
     WINDOW = 32
 
     # --- Setup and Seeding ---
-    console.rule("[bold yellow]Chronos 2 Benchmarking Setup[/bold yellow]")
+    console.rule("[bold yellow]TimesFM Benchmarking Setup[/bold yellow]")
     console.log(
-        f"Model: [green]{MODEL}[/green] | Device: [blue]{Chronos2Benchmarker.DEVICE}[/blue]"
+        f"Model: [green]{MODEL}[/green] | Device: [blue]{TimesFmBenchmarker.DEVICE}[/blue]"
     )
     torch.manual_seed(42)
     torch.cuda.manual_seed_all(42)
@@ -83,12 +95,12 @@ def main() -> None:
     )
 
     # --- Benchmarker Initialization (Triggers Model Loading) ---
-    benchmarker = Chronos2Benchmarker(dataset, model=MODEL)
+    benchmarker = TimesFmBenchmarker(dataset, model=MODEL)
     console.rule("[bold yellow]Benchmarking Process[/bold yellow]")
 
     console.log(
         "[bold blue]Running on Device:[/bold blue] "
-        f"[green]{Chronos2Benchmarker.DEVICE}[/green]"
+        f"[green]{TimesFmBenchmarker.DEVICE}[/green]"
     )
 
     # --- Running Benchmark ---

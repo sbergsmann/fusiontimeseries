@@ -3,18 +3,20 @@ from rich.console import Console
 # Initialize the Rich console object once
 console = Console()
 
-console.rule("[bold blue]Starting Chronos Bolt Tiny Benchmarking Script...[/bold blue]")
+console.rule(
+    "[bold blue]Starting Chronos Bolt Tiny Benchmarking V2 Script...[/bold blue]"
+)
 console.log("[bold blue]Importing Benchmarking Services...[/bold blue]")
-from fusiontimeseries.services.benchmarker import FluxForecastingBenchmarker  # noqa: E402
-from fusiontimeseries.services.flux_dataset import FluxDataset  # noqa: E402
-from fusiontimeseries.services.flux_trace_provider import FluxTraceProvider  # noqa: E402
+from fusiontimeseries.legacy.services.benchmarkerv2 import FluxForecastingBenchmarkerV2  # noqa: E402
+from fusiontimeseries.legacy.services.flux_dataset import FluxDataset  # noqa: E402
+from fusiontimeseries.legacy.services.flux_trace_provider import FluxTraceProvider  # noqa: E402
 
 console.log("[bold blue]Importing Chronos Library...[/bold blue]")
 from chronos import BaseChronosPipeline  # noqa: E402
 import torch  # noqa: E402
 
 
-class ChronosBoltTinyBenchmarker(FluxForecastingBenchmarker):
+class ChronosBoltTinyBenchmarkerV2(FluxForecastingBenchmarkerV2):
     def __init__(self, dataset: FluxDataset, model: str) -> None:
         super().__init__(dataset, model)
 
@@ -32,12 +34,19 @@ class ChronosBoltTinyBenchmarker(FluxForecastingBenchmarker):
         )
 
     def run_pipeline(self, input: torch.Tensor) -> torch.Tensor:
-        """Run the Chronos pipeline on the input tensor."""
+        """Run the Chronos pipeline on the input tensor.
+
+        Returns normalized predictions.
+        """
+        # Split batch into list of individual samples
+        # input shape: [batch_size, 1, context_length] -> list of [1, context_length]
+        input_list = [input[i].squeeze(0) for i in range(input.shape[0])]
 
         forecast: torch.Tensor = self.pipeline.predict(
-            input,
+            input_list,
             prediction_length=self.dataset.prediction_length,
         )
+        # Return as [batch, prediction_length, n_quantiles] (still normalized)
         return forecast.permute(0, 2, 1)
 
 
@@ -48,9 +57,9 @@ def main() -> None:
     WINDOW = 32
 
     # --- Setup and Seeding ---
-    console.rule("[bold yellow]Chronos Benchmarking Setup[/bold yellow]")
+    console.rule("[bold yellow]Chronos Bolt Tiny Benchmarking V2 Setup[/bold yellow]")
     console.log(
-        f"Model: [green]{MODEL}[/green] | Device: [blue]{ChronosBoltTinyBenchmarker.DEVICE}[/blue]"
+        f"Model: [green]{MODEL}[/green] | Device: [blue]{ChronosBoltTinyBenchmarkerV2.DEVICE}[/blue]"
     )
     torch.manual_seed(42)
     torch.cuda.manual_seed_all(42)
@@ -68,7 +77,6 @@ def main() -> None:
         "[bold magenta]⏳ Loading and Preprocessing Flux Dataset...[/bold magenta]",
         spinner="line",
     ):
-        # Assuming FluxDataset does the heavy data loading/fetching in its __init__
         dataset = FluxDataset(
             provider=fluxtrace_provider,
             prediction_length=PREDICTION_LEN,
@@ -80,16 +88,16 @@ def main() -> None:
     )
 
     # --- Benchmarker Initialization (Triggers Model Loading) ---
-    benchmarker = ChronosBoltTinyBenchmarker(dataset, model=MODEL)
-    console.rule("[bold yellow]Benchmarking Process[/bold yellow]")
+    benchmarker = ChronosBoltTinyBenchmarkerV2(dataset, model=MODEL)
+    console.rule("[bold yellow]Benchmarking V2 Process[/bold yellow]")
 
     console.log(
         "[bold blue]Running on Device:[/bold blue] "
-        f"[green]{ChronosBoltTinyBenchmarker.DEVICE}[/green]"
+        f"[green]{ChronosBoltTinyBenchmarkerV2.DEVICE}[/green]"
     )
 
     # --- Running Benchmark ---
-    console.log("[bold red]🔥 Running Core Benchmark...[/bold red]")
+    console.log("[bold red]🔥 Running Core Benchmark V2...[/bold red]")
     benchmarker.benchmark()
     console.log("[bold green]✅ Benchmark Run Complete.[/bold green]")
 
