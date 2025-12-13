@@ -26,6 +26,12 @@ cd fusiontimeseries
 uv sync --all-extras
 ```
 
+If your hardware does not support CUDA, you can install the CPU-only version of PyTorch (see [here](https://docs.astral.sh/uv/guides/integration/pytorch/#configuring-accelerators-with-optional-dependencies) for more details):
+
+```powershell
+uv sync --all-extras --pip-args="--extra-index-url https://download.pytorch.org/whl/cpu"
+```
+
 3. Install pre-commit hooks
 
 ```powershell
