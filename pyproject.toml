@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "chronos-forecasting>=2.1.0",
     "hf-xet>=1.2.0",
+    "lightning>=2.5.6",
     "rich>=14.2.0",
     "timesfm",
     "tirex-ts[gluonts,hfdataset]>=1.1.1",
