@@ -73,19 +73,27 @@ Performance of finetuned models on the same heat flux prediction task.
 The remaining 251 samples were sub-sampled from 800 timesteps to 266 (every 3rd timestep) to resemble the benchmark time series as closely as possible.
 For finetuning autogluon samples a custom validation set from the training data. This validation set consists of timeseries where the [:-prediction_length] tail is used for validation and hyperparameter tuning.
 I created a routine to manually provide a validation set by sampling the training set timeseries in a stratified manner. This is achieved by assigning each time series to a bin depending on the time series mean.
+However, since also with this approach only the last prediction tail is used for validation and we want to predict time series from timestep 80 onwards I changed the validation window and step size config to num_val_windows=2 and val_step_size=64. Using this the model is evaluated on the following time series sub-intervals:
+> ctx 58 | pred 80 = 142
+> ctx 58 + 64 | pred 80 = 182
+> ctx 58 + 64 + 64 | pred 80 = 266
 
-> **Todo:** However, since also with this approach only the last prediction tail is used for validation and we want to predict time series from timestep 80 onwards I have to come up with a different solution.
+Providing a separate tuning_data as validation set during training enables the model to also learn the last prediction_length timesteps during training, otherwise the last prediction_length timesteps are only used for validation, not for training.
+In the current setting, the model learns ONLY to predict the last prediction_length timesteps - so context length 186 is used as history and then trained to forecast the next 80 timesteps. In order to make the model also learn prior patterns in flux traces, I need to manually window the data and remove the num_val_windows and val_step_size parameters again.
 
 To increase the amount of training data, I subsampled each flux trace three times with a distance of three timesteps.
 
-| Model                               | Training Samples | Fine-tune Mode | Learning Rate | Steps    | Batch Size | Cross Learning | LoRA r | LoRA α | In-Distribution RMSE | In-Distribution SE | Out-of-Distribution RMSE | Out-of-Distribution SE | Date           |
-| ----------------------------------- | ---------------- | -------------- | ------------- | -------- | ---------- | -------------- | ------ | ------ | -------------------- | ------------------ | ------------------------ | ---------------------- | -------------- |
-| Chronos2 (Finetuned)                | 251              | LoRA           | 1e-4          | 3000     | 64         | No             | 16     | 32     | 18.29                | 3.54               | 37.45                    | 6.77                   | 2025-12-31     |
-| **Chronos2 (Hyperparameter Tuned)** | **251**          | **LoRA**       | **1.77e-4**   | **3000** | **64**     | **Yes**        | **16** | **32** | **15.41**            | **2.55**           | **34.05**                | **9.87**               | **2026-01-01** |
-| Chronos2 (Augmented Data)           | 753              | LoRA           | 1.77e-4       | 3000     | 64         | No             | 16     | 32     | 26.32                | 4.53               | 36.54                    | 10.56                  | 2026-01-01     |
-| Chronos2 (Custom Val Set)           | 677              | LoRA           | 1.7e-4        | 5000     | 64         | No             | 16     | 32     | 24.45                | 6.94               | 38.17                    | 14.32                  | 2026-01-01     |
-| Chronos2 (Custom Val Set)           | 677              | LoRA           | 5e-4          | 6000     | 72         | Yes            | 16     | 32     | 27.86                | 7.03               | 36.69                    | 17.63                  | 2026-01-01     |
-| Chronos2 (Custom Val Set)           | 677              | LoRA           | 4.88e-4       | 4000     | 64         | Yes            | 32     | 64     | 31.36                | 7.18               | 39.30                    | 16.35                  | 2026-01-01     |
+| Model                                 | Training Samples | Fine-tune Mode | Learning Rate | Steps    | Batch Size | Cross Learning | LoRA r | LoRA α | In-Distribution RMSE | In-Distribution SE | Out-of-Distribution RMSE | Out-of-Distribution SE | Date           |
+| ------------------------------------- | ---------------- | -------------- | ------------- | -------- | ---------- | -------------- | ------ | ------ | -------------------- | ------------------ | ------------------------ | ---------------------- | -------------- |
+| Chronos2 (Finetuned)                  | 251              | LoRA           | 1e-4          | 3000     | 64         | No             | 16     | 32     | 18.29                | 3.54               | 37.45                    | 6.77                   | 2025-12-31     |
+| **Chronos2 (Hyperparameter Tuned)**   | **251**          | **LoRA**       | **1.77e-4**   | **3000** | **64**     | **Yes**        | **16** | **32** | **15.41**            | **2.55**           | **34.05**                | **9.87**               | **2026-01-01** |
+| Chronos2 (Augmented Data)             | 753              | LoRA           | 1.77e-4       | 3000     | 64         | No             | 16     | 32     | 26.32                | 4.53               | 36.54                    | 10.56                  | 2026-01-01     |
+| Chronos2 (Custom Val Set)             | 677              | LoRA           | 1.7e-4        | 5000     | 64         | No             | 16     | 32     | 24.45                | 6.94               | 38.17                    | 14.32                  | 2026-01-01     |
+| Chronos2 (Custom Val Set)             | 677              | LoRA           | 5e-4          | 6000     | 72         | Yes            | 16     | 32     | 27.86                | 7.03               | 36.69                    | 17.63                  | 2026-01-01     |
+| Chronos2 (Custom Val Set)             | 677              | LoRA           | 4.88e-4       | 4000     | 64         | Yes            | 32     | 64     | 31.36                | 7.18               | 39.30                    | 16.35                  | 2026-01-01     |
+| Chronos2 (multi val folds)            | 677              | LoRA           | 5e-4          | 3000     | 64         | Yes            | 16     | 32     | 19.15                | 5.59               | 38.74                    | 13.42                  | 2026-01-05     |
+| Chronos2 (windowed train and val set) | 2031             | LoRA           | 5e-4          | 3000     | 64         | Yes            | 16     | 32     | 26.91                | 7.79               | 38.04                    | 14.25                  | 2026-01-05     |
+| Chronos2 (windowed 7000s)             | 2031             | LoRA           | 5e-4          | 7000     | 64         | Yes            | 16     | 32     | 31.28                | 7.58               | 35.97                    | 14.74                  | 2026-01-05     |
 
 **Finetuning Configuration (Hyperparameter Tuned)**:
 - Fine-tune mode: LoRA (Low-Rank Adaptation)
