@@ -155,6 +155,97 @@ def create_train_and_test_flux_ts_dataframes(
     return train_set, val_set
 
 
+@cache
+def create_windowed_train_and_test_flux_ts_dataframes(
+    n_discretation_quantiles: int = 5,
+    test_set_size: float = 0.1,
+    prediction_length: int = 80,
+    window_size: int = 64,
+    num_val_windows: Literal[1] = 1,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Splits flux timeseries data into train and validation sets.
+    Splitting is based on stratified sampling of the mean target values.
+
+    Args:
+        n_discretation_quantiles (int, optional): In how many bins shall the timeseries means be split for stratified sampling. Defaults to 5.
+        test_set_size (float, optional): How big shall the validation set be. Defaults to 0.1.
+        prediction_length (int, optional): The prediction length of the model. Defaults to 80.
+            AutoGluon .fit method does filter all timeseries shorter than (num_val_windows + 1) * prediction_length.
+            So we need to ensure that all timeseries are at least that long.
+        window_size (int, optional): The window size to use for windowing the timeseries. Defaults to 64.
+        num_val_windows (int, optional): The number of validation windows. Defaults to 1 (do not change).
+
+    Returns:
+        tuple[pd.DataFrame, pd.DataFrame]: training and validation set.
+    """
+    training_flux_traces: dict[int, np.ndarray] = get_valid_flux_traces(
+        full_subsampling=True
+    )
+
+    records = []
+    for item_id, flux_trace in training_flux_traces.items():
+        for t in range(flux_trace.shape[0]):
+            records.append(
+                {
+                    "item_id": item_id,
+                    "timestamp": TIMESERIES_CONVERSION_START_TIMESTAMP
+                    + pd.to_timedelta(t, unit=TIMESERIES_CONVERSION_TIMEDELTA_UNIT),  # type: ignore
+                    "target": flux_trace[t],
+                }
+            )
+    flux_ts_df = pd.DataFrame(records)
+
+    # Compute mean of each series
+    mean_df: pd.DataFrame = (
+        flux_ts_df.groupby("item_id")["target"].mean().to_frame().reset_index()
+    )
+
+    # Bin the target values into quartiles for stratification
+    mean_df["target_bin"] = pd.qcut(
+        mean_df["target"], q=n_discretation_quantiles, labels=False, duplicates="drop"
+    )
+
+    train_ids, val_ids = train_test_split(
+        mean_df["item_id"],
+        test_size=test_set_size,
+        stratify=mean_df["target_bin"],
+        random_state=42,
+    )
+    train_ids: pd.Series
+    val_ids: pd.Series
+
+    train_set: pd.DataFrame = flux_ts_df[flux_ts_df["item_id"].isin(train_ids)]
+    val_set: pd.DataFrame = flux_ts_df[flux_ts_df["item_id"].isin(val_ids)]
+
+    def window(timeseries_df: pd.DataFrame) -> pd.DataFrame:
+        windows = []
+        incremental_item_id: int = 0
+        for _, group in timeseries_df.groupby("item_id"):
+            group: pd.DataFrame
+
+            if len(group) < (num_val_windows + 1) * prediction_length:
+                # AutoGluon .fit method will filter out these short timeseries anyway
+                continue
+
+            for end_idx in range(
+                (num_val_windows + 1) * prediction_length,
+                len(group) + window_size,
+                window_size,
+            ):
+                window = group.iloc[:end_idx].copy()
+                window["item_id"] = incremental_item_id
+                incremental_item_id += 1
+                windows.append(window)
+
+        windowed_df = pd.concat(windows, ignore_index=True)
+        return windowed_df
+
+    windowed_train_set: pd.DataFrame = window(train_set)
+    windowed_val_set: pd.DataFrame = window(val_set)
+
+    return windowed_train_set, windowed_val_set
+
+
 def get_benchmark_flux_traces() -> dict[
     Literal["ood", "id"], dict[int, NDArray[np.float32]]
 ]:
