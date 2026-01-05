@@ -73,11 +73,14 @@ Performance of finetuned models on the same heat flux prediction task.
 
 To increase the amount of training data, I subsampled each flux trace three times with a distance of three timesteps.
 
-| Model                               | Training Samples | Fine-tune Mode | In-Distribution RMSE | In-Distribution SE | Out-of-Distribution RMSE | Out-of-Distribution SE | Date       |
-| ----------------------------------- | ---------------- | -------------- | -------------------- | ------------------ | ------------------------ | ---------------------- | ---------- |
-| Chronos2 (Finetuned)                | 251              | LoRA           | 18.29                | 3.54               | 37.45                    | 6.77                   | 2025-12-31 |
-| **Chronos2 (Hyperparameter Tuned)** | 251              | LoRA           | **15.41**            | **2.55**           | **34.05**                | **9.87**               | 2026-01-01 |
-| Chronos2 T2 (Augmented Data)        | 753              | LoRA           | 26.32                | 4.53               | 36.54                    | 10.56                  | 2026-01-01 |
+| Model                               | Training Samples | Fine-tune Mode | Learning Rate | Steps    | Batch Size | Cross Learning | LoRA r | LoRA α | In-Distribution RMSE | In-Distribution SE | Out-of-Distribution RMSE | Out-of-Distribution SE | Date           |
+| ----------------------------------- | ---------------- | -------------- | ------------- | -------- | ---------- | -------------- | ------ | ------ | -------------------- | ------------------ | ------------------------ | ---------------------- | -------------- |
+| Chronos2 (Finetuned)                | 251              | LoRA           | 1e-4          | 3000     | 64         | No             | 16     | 32     | 18.29                | 3.54               | 37.45                    | 6.77                   | 2025-12-31     |
+| **Chronos2 (Hyperparameter Tuned)** | **251**          | **LoRA**       | **1.77e-4**   | **3000** | **64**     | **Yes**        | **16** | **32** | **15.41**            | **2.55**           | **34.05**                | **9.87**               | **2026-01-01** |
+| Chronos2 (Augmented Data)           | 753              | LoRA           | 1.77e-4       | 3000     | 64         | No             | 16     | 32     | 26.32                | 4.53               | 36.54                    | 10.56                  | 2026-01-01     |
+| Chronos2 (Custom Val Set)           | 677              | LoRA           | 1.7e-4        | 5000     | 64         | No             | 16     | 32     | 24.45                | 6.94               | 38.17                    | 14.32                  | 2026-01-01     |
+| Chronos2 (Custom Val Set)           | 677              | LoRA           | 5e-4          | 6000     | 72         | Yes            | 16     | 32     | 27.86                | 7.03               | 36.69                    | 17.63                  | 2026-01-01     |
+| Chronos2 (Custom Val Set)           | 677              | LoRA           | 4.88e-4       | 4000     | 64         | Yes            | 32     | 64     | 31.36                | 7.18               | 39.30                    | 16.35                  | 2026-01-01     |
 
 **Finetuning Configuration (Hyperparameter Tuned)**:
 - Fine-tune mode: LoRA (Low-Rank Adaptation)
