@@ -58,6 +58,7 @@ class FinetuningResults(BaseModel):
 
 def save_finetuning_results(
     results: FinetuningResults,
+    id: str | None = None,
     output_dir: Path | None = None,
     filename_prefix: str = "finetuning",
 ) -> Path:
@@ -65,6 +66,7 @@ def save_finetuning_results(
 
     Args:
         results (FinetuningResults): The results to save.
+        id (str | None): Optional identifier for the evaluation run.
         output_dir (Path | None): Directory to save results. Defaults to data/ folder.
         filename_prefix (str): Prefix for the filename.
 
@@ -76,9 +78,9 @@ def save_finetuning_results(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = results.timestamp
-    safe_model_name = (
-        results.config.model_name.replace("/", "_").replace("\\", "_").replace(" ", "-")
-    )
+    safe_model_name = id or results.config.model_name.replace("/", "_").replace(
+        "\\", "_"
+    ).replace(" ", "-")
     filename = f"{timestamp}_{safe_model_name}_{filename_prefix}_results.json"
     filepath = output_dir / filename
 
@@ -299,6 +301,7 @@ def run_complete_evaluation(
     predictor: TimeSeriesPredictor,
     config: FinetuningConfig,
     training_data_size: int,
+    id: str | None = None,
     predictor_path: str | None = None,
     output_dir: Path | None = None,
 ) -> tuple[FinetuningResults, Path, Path]:
@@ -315,6 +318,7 @@ def run_complete_evaluation(
         predictor (TimeSeriesPredictor): The trained predictor.
         config (FinetuningConfig): Configuration used for finetuning.
         training_data_size (int): Number of training time series.
+        id (str | None): Optional identifier for the evaluation run.
         predictor_path (str | None): Path to saved predictor.
         output_dir (Path | None): Directory to save results. Defaults to results/ folder.
 
@@ -328,9 +332,9 @@ def run_complete_evaluation(
         output_dir = Path(__file__).resolve().parent.parent.parent.parent / "results"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    safe_model_name = (
-        config.model_name.replace("/", "_").replace("\\", "_").replace(" ", "-")
-    )
+    safe_model_name = id or config.model_name.replace("/", "_").replace(
+        "\\", "_"
+    ).replace(" ", "-")
     plots_dir = output_dir / "plots" / f"{timestamp}_{safe_model_name}_finetuning"
     plots_dir.mkdir(parents=True, exist_ok=True)
 
@@ -415,7 +419,7 @@ def run_complete_evaluation(
 
     # Save results
     print("Saving results JSON...")
-    json_path = save_finetuning_results(results, output_dir=output_dir)
+    json_path = save_finetuning_results(results, id=id, output_dir=output_dir)
 
     print(f"\\n{'=' * 60}")
     print("Evaluation Complete!")
