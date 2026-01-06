@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from autogluon.timeseries import TimeSeriesDataFrame, TimeSeriesPredictor
 from fusiontimeseries.benchmarking.benchmark_utils import rmse_with_standard_error
+from fusiontimeseries.finetuning.evaluation.loss_curve import plot_loss_curve
 from fusiontimeseries.finetuning.preprocessing.utils import get_benchmark_flux_traces
 
 __all__ = [
@@ -398,6 +399,10 @@ def run_complete_evaluation(
         start_context_length=config.start_context_length,
         save_path=id_plots_dir,
     )
+
+    if predictor_path is not None:
+        print("Generating loss curve plot...")
+        plot_loss_curve(predictor_path=predictor_path, save_path=plots_dir)
 
     # Create results object
     results = FinetuningResults(
