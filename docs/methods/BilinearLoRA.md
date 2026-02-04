@@ -4,41 +4,41 @@
 
 The forward computation implements a **conditioned low-rank adapter**:
 
-\[
+$$
 y = W x + \Delta y
-\]
+$$
 
 Where the base linear output is:
 
-\[
+$$
 W x
-\]
+$$
 
 and the **conditional LoRA update** is:
 
-\[
+$$
 \Delta y = B \Big( (A x) \odot (C p) \Big)
-\]
+$$
 
 Breaking it down:
 
 1. **Input projection (rank space):**
 
-\[
+$$
 h = x \cdot A^T \in \mathbb{R}^{B \times \dots \times r}
-\]
+$$
 
 2. **Condition projection (rank space):**
 
-\[
+$$
 c = p \cdot C^T \in \mathbb{R}^{B \times r}
-\]
+$$
 
 3. **Rank-wise interaction:**
 
-\[
+$$
 h \odot c
-\]
+$$
 
 - Elementwise multiplication in rank space.
 - Introduces **bilinear interaction** between the input features `x` and conditioning `p`.
@@ -47,15 +47,15 @@ h \odot c
 
 1. **Lift back to output space:**
 
-\[
+$$
 \Delta y = (h \odot c) B^T \in \mathbb{R}^{B \times \dots \times \text{out\_features}}
-\]
+$$
 
 5. **Scaling:**
 
-\[
+$$
 \Delta y \gets \Delta y \cdot \frac{\alpha}{r}
-\]
+$$
 
 - Standard LoRA scaling for stable magnitude relative to rank `r`.
 - Prevents explosion when using small ranks or strong bilinear interactions.
@@ -137,9 +137,9 @@ This implementation is essentially a **conditional low-rank adapter with bilinea
 
 Mathematically:
 
-\[
+$$
 y = W x + B \big( (A x) \odot (A_p p) \big) \cdot \frac{\alpha}{r}
-\]
+$$
 
 **Key properties:**
 

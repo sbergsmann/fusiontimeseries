@@ -6,9 +6,9 @@ I introduce **RSSBilinearLoRA** a conditional adaptation mechanism that extens L
 
 LoRA parametrizes weight updates as a low-rank decomposition
 
-\[
+$$
     \Delta W = BA; B, A \in R^{r}
-\]
+$$
 
 and injects this update into a pretrained model without modifying the base weights. Whilst being an effective finetuning method to enable downstream task adaptation, standard LoRA is fully conditioned and dependent on the input only. External control signal such as operating conditions, regimes, or system states do not influnce the low-rank adaption.
 
@@ -22,9 +22,9 @@ RSSBilinearLoRA addresses this gap by applying FiLM-style modulation inside LoRA
 
 Given input \( x \in \mathbb{R}^{d_{\text{in}}} \), standard LoRA computes
 
-\[
+$$
 y = W x + B (A x)
-\]
+$$
 
 where
 
@@ -39,17 +39,17 @@ where
 Let \( p \in \mathbb{R}^{d_p} \) denote external operating parameters.
 RSSBilinearLoRA introduces a learned projection
 
-\[
+$$
 g(p) = C p \in \mathbb{R}^{r}
-\]
+$$
 
 which produces a **rank-wise gating vector**. The low-rank activation becomes
 
-\[
+$$
 h = A x
 \quad \Rightarrow \quad
 \tilde{h} = h \odot g(p)
-\]
+$$
 
 This bilinear interaction allows the influence of each rank direction to depend on the operating condition.
 
@@ -59,21 +59,21 @@ This bilinear interaction allows the influence of each rank direction to depend 
 
 To further increase expressivity, we introduce a **rank-space shift**
 
-\[
+$$
 b(p) = S p \in \mathbb{R}^{r}
-\]
+$$
 
 yielding the final modulated rank representation
 
-\[
+$$
 \hat{h} = g(p) \odot h + b(p)
-\]
+$$
 
 The output update is then
 
-\[
+$$
 \Delta y = B \hat{h}
-\]
+$$
 
 ---
 
@@ -81,15 +81,15 @@ The output update is then
 
 The complete RSSBilinearLoRA forward computation is
 
-\[
+$$
 y = W x + \alpha \cdot B \left( (A x \odot C p) + S p \right)
-\]
+$$
 
 where
 
-\[
+$$
 \alpha = \frac{\text{lora\_alpha}}{r}
-\]
+$$
 
 is the standard LoRA scaling factor.
 
@@ -125,9 +125,9 @@ This stands in contrast to output-space conditioning, which introduces unconstra
 
 RSSBilinearLoRA introduces only
 
-\[
+$$
 \mathcal{O}(r \cdot d_p)
-\]
+$$
 
 additional parameters per adapted layer, which is negligible compared to full fine-tuning and comparable to standard LoRA extensions.
 
